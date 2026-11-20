@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>PrismClock — Live Raycasting Pachinko Clock Widget</title>
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      if (q.get('transparent') === '1') document.documentElement.classList.add('bg-transparent');
+      if (q.get('widget') === '1' || window.prismDesktop) document.documentElement.classList.add('is-desktop-widget');
+    })();
+  </script>
+  <link rel="stylesheet" href="clock.css">
+</head>
+<body>
+  <main class="clock-stage">
+    <div class="clock-frame" id="clockFrame">
+      <canvas id="clockCanvas" aria-label="Live pachinko raycasting clock. Click to drop a glowing ball, drag to move widget, scroll to resize."></canvas>
+
+      <div class="time-hud" id="timeHud" aria-live="off">
+        <div class="time-readout" id="timeReadout">12:00:00</div>
+        <div class="time-legend" id="timeLegend"></div>
+      </div>
+
+      <output id="sizePill" class="size-pill" aria-live="off"></output>
+    </div>
+
+    <nav class="hover-dock" aria-label="Clock widget controls">
+      <button type="button" id="btnPausePlay" class="dock-btn" title="Pause or resume clock animation (Space)">
+        ⏸ Pause
+      </button>
+
+      <select id="selClockBoard" class="dock-select" aria-label="Select clock board"></select>
+
+      <button type="button" id="btnRhythm" class="dock-btn" title="Switch between 1s/60s/60m Cascade and 60s/60m/12h Zen Horology">
+        Cascade
+      </button>
+
+      <button type="button" id="btnSpeed" class="dock-btn" title="Speed up time to preview minute &amp; hour warp resets">
+        1×
+      </button>
+
+      <button type="button" id="btnFace" class="dock-btn" title="Toggle digital time display">
+        Digital
+      </button>
+
+      <button type="button" id="btnBg" class="dock-btn" title="Switch between Transparent floating mode and Obsidian dark backdrop">
+        Obsidian
+      </button>
+
+      <span class="dock-sep desktop-only" hidden aria-hidden="true"></span>
+
+      <button type="button" id="btnPinTop" class="dock-btn desktop-only active" hidden title="Keep floating always on top">
+        📌 Top
+      </button>
+
+      <button type="button" id="btnClickThrough" class="dock-btn desktop-only" hidden title="Pass clicks through to windows underneath (Ctrl+Shift+T to unlock)">
+        👻 Pass
+      </button>
+
+      <button type="button" id="btnOpenLabDesktop" class="dock-btn desktop-only" hidden title="Open PrismDrop Design Lab">
+        Lab
+      </button>
+
+      <button type="button" id="btnCloseWidget" class="dock-btn dock-btn-danger desktop-only" hidden title="Close PrismClock desktop widget">
+        ✕
+      </button>
+
+      <a href="index.html" id="linkLabBrowser" class="dock-btn" title="Return to PrismDrop Design Lab">
+        ← Lab
+      </a>
+    </nav>
+  </main>
+
+  <script defer src="js/math.js"></script>
+  <script defer src="js/engine.js"></script>
+  <script defer src="js/presets.js"></script>
+  <script defer src="js/clock.js"></script>
+</body>
+</html>

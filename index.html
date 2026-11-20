@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>PrismDrop — Live Raycasting Pachinko &amp; Complication Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◈</span>
+        <div class="brand-text">
+          <h1>PrismDrop</h1>
+          <span class="brand-sub">Deterministic Raycasting &amp; Outcome Distribution Lab</span>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <div class="segmented" role="group" aria-label="Solver mode">
+          <button type="button" class="seg-btn active" data-solver="physics" title="Continuous 2D analytical ballistic raycasting with convergence check">
+            Physics Raycaster
+          </button>
+          <button type="button" class="seg-btn" data-solver="markov" title="Provable closed-form absorbing Markov chain (I-Q)^-1 + exact PMF convolution">
+            Exact Markov (Provable)
+          </button>
+        </div>
+
+        <label class="inline-field" for="presetSelect">
+          <span class="field-label">Preset</span>
+          <select id="presetSelect" aria-label="Load board preset"></select>
+        </label>
+
+        <div class="btn-group">
+          <button type="button" id="btnLockBaseline" class="btn btn-secondary" title="Snapshot current board as dashed baseline reference">
+            Lock Baseline
+          </button>
+          <button type="button" id="btnDropBall" class="btn btn-primary" title="Animate a physical test ball along the trained/inspected ray (Space)">
+            ▶ Drop Ball
+          </button>
+          <button type="button" id="btnBurstBalls" class="btn btn-secondary" title="Drop 5 balls sampled across Naive &amp; Trained distributions">
+            Burst ×5
+          </button>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" id="btnOpenBuilder" class="btn btn-accent">
+            + Build Complication
+          </button>
+          <button type="button" id="btnOpenIO" class="btn btn-secondary">
+            Import / Export
+          </button>
+          <a href="clock.html" class="btn btn-secondary" title="Open live raycasting Pachinko Clock widget">
+            ◷ Clock Widget
+          </a>
+          <button type="button" id="btnUndo" class="btn btn-ghost" title="Undo last edit (Ctrl+Z)" disabled>
+            ↶ Undo
+          </button>
+        </div>
+
+        <output id="perfChip" class="perf-chip" aria-live="polite">—</output>
+      </div>
+    </header>
+
+    <aside class="left-panel scroller" aria-label="Board tools and complications">
+      <!-- Tool & Complication Palette -->
+      <section class="panel-card">
+        <div class="panel-header">
+          <h2>Complications Palette</h2>
+          <label class="check-inline" for="chkSnap">
+            <input type="checkbox" id="chkSnap">
+            <span>Grid Snap</span>
+          </label>
+        </div>
+
+        <div class="palette-grid" id="paletteGrid" role="toolbar" aria-label="Placement tools"></div>
+
+        <div id="customPaletteWrap" class="custom-palette-wrap" hidden>
+          <div class="sub-header">
+            <span>Custom Built</span>
+          </div>
+          <div class="palette-grid" id="customPaletteGrid"></div>
+        </div>
+      </section>
+
+      <!-- Selected Object Live Inspector -->
+      <section class="panel-card inspector-card" id="inspectorCard" hidden>
+        <div class="panel-header">
+          <h2 id="inspectorTitle">Selected Object</h2>
+          <div class="mini-actions">
+            <button type="button" id="btnDupObj" class="btn-xs" title="Duplicate (D)">Copy</button>
+            <button type="button" id="btnDelObj" class="btn-xs btn-danger" title="Delete (Del)">Delete</button>
+          </div>
+        </div>
+        <div id="inspectorBody" class="inspector-grid"></div>
+      </section>
+
+      <!-- Board Size, Chamber Shape & Parametric Lattice Generator -->
+      <details class="panel-card">
+        <summary class="panel-summary">Board Size &amp; Lattice Generator</summary>
+        <div class="control-stack">
+          <div class="slider-row">
+            <label for="slBoardW"><span>Board Width</span><output id="outBoardW">540 px</output></label>
+            <input type="range" id="slBoardW" min="360" max="820" step="20" value="540">
+          </div>
+
+          <div class="slider-row">
+            <label for="slBoardH"><span>Board Height</span><output id="outBoardH">720 px</output></label>
+            <input type="range" id="slBoardH" min="480" max="1000" step="20" value="720">
+          </div>
+
+          <div class="field-block">
+            <label class="field-label" for="selChamberShape">Chamber Shape</label>
+            <select id="selChamberShape">
+              <option value="rect">Rectangle (Plinko / Peglin)</option>
+              <option value="arch">Pachinko Arch Dome</option>
+              <option value="funnel">Pinball Funnel Gutters</option>
+              <option value="diamond">Diamond Prism Bevels</option>
+            </select>
+          </div>
+
+          <div class="lattice-grid">
+            <div class="field-block">
+              <label class="field-label" for="selLatPattern">Lattice Pattern</label>
+              <select id="selLatPattern">
+                <option value="staggered">Staggered Galton</option>
+                <option value="grid">Square Grid</option>
+                <option value="pyramid">Pyramid</option>
+                <option value="hex">Hex Rings</option>
+              </select>
+            </div>
+            <div class="field-block">
+              <label class="field-label" for="selLatPegType">Base Peg Type</label>
+              <select id="selLatPegType">
+                <option value="peg">Standard Peg</option>
+                <option value="popPeg">Pop Peg (Depletes)</option>
+              </select>
+            </div>
+            <div class="field-block">
+              <label class="field-label" for="numLatRows">Rows</label>
+              <input type="number" id="numLatRows" min="3" max="14" value="8">
+            </div>
+            <div class="field-block">
+              <label class="field-label" for="numLatCols">Cols</label>
+              <input type="number" id="numLatCols" min="4" max="14" value="9">
+            </div>
+          </div>
+
+          <button type="button" id="btnGenLattice" class="btn btn-secondary">
+            Regenerate Base Lattice
+          </button>
+        </div>
+      </details>
+
+      <!-- Machine & Physics Parameters -->
+      <details class="panel-card" open>
+        <summary class="panel-summary">Machine, Rounds &amp; Physics</summary>
+        <div class="control-stack">
+          <div class="segmented" role="group" aria-label="Launcher mode">
+            <button type="button" class="seg-btn active" data-launcher="drop">Drop Rail (Plinko)</button>
+            <button type="button" class="seg-btn" data-launcher="cannon">Pivot Cannon (Peglin)</button>
+          </div>
+
+          <div class="slider-row">
+            <label for="slShotsPerRound"><span>Shots / Round (Depletion)</span><output id="outShotsPerRound">1</output></label>
+            <input type="range" id="slShotsPerRound" min="1" max="5" step="1" value="1">
+            <small class="hint">Pop Pegs, Synergy Buffs &amp; Counters persist across shots until Refresh</small>
+          </div>
+
+          <div class="slider-row">
+            <label for="slGravity"><span>Gravity</span><output id="outGravity">920</output></label>
+            <input type="range" id="slGravity" min="0" max="1200" step="20" value="920">
+            <small class="hint">Set to 0 for pure straight-line optical reflections</small>
+          </div>
+
+          <div class="slider-row">
+            <label for="slSpeed"><span>Launch Speed</span><output id="outSpeed">340</output></label>
+            <input type="range" id="slSpeed" min="120" max="760" step="10" value="340">
+          </div>
+
+          <div class="slider-row">
+            <label for="slRestitution"><span>Bounce Scale</span><output id="outRestitution">1.00×</output></label>
+            <input type="range" id="slRestitution" min="0.4" max="1.35" step="0.05" value="1">
+          </div>
+
+          <div class="slider-row">
+            <label for="slBallRadius"><span>Ball Radius</span><output id="outBallRadius">7 px</output></label>
+            <input type="range" id="slBallRadius" min="4" max="13" step="0.5" value="7">
+          </div>
+
+          <div class="slider-row">
+            <label for="slRayCount"><span>Ray Resolution</span><output id="outRayCount">220</output></label>
+            <input type="range" id="slRayCount" min="60" max="380" step="20" value="220">
+          </div>
+
+          <div class="slider-row">
+            <label for="slMaxBounces"><span>Max Bounces</span><output id="outMaxBounces">52</output></label>
+            <input type="range" id="slMaxBounces" min="12" max="100" step="4" value="52">
+          </div>
+
+          <div class="precision-box" id="physicsPrecisionBox">
+            <label class="check-inline" for="chkSpinFriction">
+              <input type="checkbox" id="chkSpinFriction">
+              <span>2D Spin, Friction &amp; Magnus Curve</span>
+            </label>
+            <label class="check-inline" for="chkBallCollisions">
+              <input type="checkbox" id="chkBallCollisions">
+              <span>Ball-to-Ball Splitter Collisions</span>
+            </label>
+            <label class="check-inline" for="chkMovingBucket">
+              <input type="checkbox" id="chkMovingBucket">
+              <span>Moving Bonus Bucket (×2 + Replay)</span>
+            </label>
+            <div class="slider-row" id="phaseSliderWrap">
+              <label for="slPhase"><span>Moving Start Phase</span><output id="outPhase">0°</output></label>
+              <input type="range" id="slPhase" min="0" max="360" step="15" value="0">
+            </div>
+            <label class="check-inline" for="chkExactParabola">
+              <input type="checkbox" id="chkExactParabola" checked>
+              <span>Exact Analytic Parabola (10⁻¹⁴)</span>
+            </label>
+            <label class="check-inline" for="chkAdaptiveOversample">
+              <input type="checkbox" id="chkAdaptiveOversample" checked>
+              <span>Adaptive Trained Oversampling (+160)</span>
+            </label>
+          </div>
+
+          <div class="field-block">
+            <label class="field-label" for="selScoreMode">Outcome Formula</label>
+            <select id="selScoreMode">
+              <option value="total">Total Score: (Pegs + Slot) × Mult</option>
+              <option value="slotMult">Multiplicative Slots: Pegs × Mult × Slot</option>
+              <option value="slotIndex">Pure Galton Bucket (#1 … #N)</option>
+            </select>
+          </div>
+
+          <div class="field-block">
+            <label class="field-label" for="txtSlots">Bottom Slots (numbers or special tokens)</label>
+            <input type="text" id="txtSlots" value="10, 20, 35, 55, 80, 100, 80, 55, 35, 20, 10" spellcheck="false">
+            <small class="hint">Specials: <code>50R</code> replay, <code>40F</code> refresh, <code>H</code> ÷2 tax, <code>x2</code> double</small>
+          </div>
+        </div>
+      </details>
+
+      <!-- Complication Layer Stack -->
+      <details class="panel-card" open>
+        <summary class="panel-summary">
+          <span>Complication Layers</span>
+          <span id="layerCountBadge" class="count-pill">0</span>
+        </summary>
+        <div class="layer-master-row">
+          <label class="check-inline" for="chkToggleBase">
+            <input type="checkbox" id="chkToggleBase" checked>
+            <span>Base Pegs</span>
+          </label>
+          <label class="check-inline" for="chkToggleComps">
+            <input type="checkbox" id="chkToggleComps" checked>
+            <span>All Complications</span>
+          </label>
+        </div>
+        <ul id="layerList" class="layer-list" aria-label="Placed complications"></ul>
+      </details>
+    </aside>
+
+    <!-- Center Stage: Live Optical Raycasting Chamber -->
+    <main class="stage-panel">
+      <div class="stage-bar">
+        <div class="stage-bar-group">
+          <div class="stage-bar-group" id="physicsBarControls">
+            <span class="mini-label">Rays</span>
+            <div class="segmented segmented-sm" role="group" aria-label="Ray coloring mode">
+              <button type="button" class="seg-btn active" data-raycolor="score">Score Heat</button>
+              <button type="button" class="seg-btn" data-raycolor="skill">Skill Bands</button>
+              <button type="button" class="seg-btn" data-raycolor="slot">Slot Basins</button>
+            </div>
+          </div>
+
+          <div class="stage-bar-group" id="markovBarControls" hidden>
+            <span class="mini-label">Exact Flow</span>
+            <div class="segmented segmented-sm" role="group" aria-label="Markov flow population">
+              <button type="button" class="seg-btn active" data-markovflow="trained">Trained</button>
+              <button type="button" class="seg-btn" data-markovflow="naive">Naive</button>
+              <button type="button" class="seg-btn" data-markovflow="uniform">All Uniform</button>
+            </div>
+          </div>
+
+          <label class="check-inline" for="chkHeatmap">
+            <input type="checkbox" id="chkHeatmap" checked>
+            <span>Peg Heat</span>
+          </label>
+        </div>
+
+        <div class="stage-bar-group">
+          <button type="button" id="btnClearComps" class="btn-xs" title="Remove placed complications while keeping base pegs">
+            Reset Complications
+          </button>
+          <button type="button" id="btnClearAll" class="btn-xs btn-danger" title="Clear entire board">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <div class="board-frame" id="boardFrame">
+        <canvas id="boardCanvas" width="540" height="720" aria-label="Interactive raycasting pachinko board"></canvas>
+      </div>
+
+      <div class="stage-status" id="stageStatus" role="status" aria-live="polite">
+        Hover the launch rail or sensitivity curve to inspect a single reflection path; click any chart bar or bottom slot for reverse attribution.
+      </div>
+    </main>
+
+    <!-- Right Column: AnyDice-Style Analytics & Skill Comparison -->
+    <section class="analytics-panel scroller" aria-label="Probability distributions and skill analytics">
+      <!-- Live Proof / Convergence Verification Banner -->
+      <div class="proof-banner proof-converged" id="proofBanner" role="status" aria-live="polite">
+        <span class="proof-badge" id="proofBadge">Analytic</span>
+        <span class="proof-text" id="proofText">Computing precision metrics…</span>
+      </div>
+
+      <!-- Multi-Shot Round Depletion Breakdown (shown when shotsPerRound > 1) -->
+      <div class="round-strip" id="roundStrip" hidden></div>
+
+      <!-- Variety & Skill Fingerprint Cards -->
+      <div class="kpi-grid" id="kpiGrid">
+        <article class="kpi-card">
+          <span class="kpi-label">Expected Score (<span class="no-upper">μ</span>)</span>
+          <strong class="kpi-val" id="kpiMean">—</strong>
+          <span class="kpi-sub" id="kpiMeanSub">Median —</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Variety (Entropy)</span>
+          <strong class="kpi-val" id="kpiEntropy">—</strong>
+          <span class="kpi-sub" id="kpiEntropySub">Skew —</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Fat-Tail Ratio (P99/P50)</span>
+          <strong class="kpi-val" id="kpiTail">—</strong>
+          <span class="kpi-sub" id="kpiTailSub">P90 —</span>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-label">Skill Agency (MI)</span>
+          <strong class="kpi-val" id="kpiSkill">—</strong>
+          <span class="kpi-sub" id="kpiSkillSub">Trained vs Naive —</span>
+        </article>
+      </div>
+
+      <!-- AnyDice-style Outcome Distribution Chart -->
+      <article class="panel-card chart-card">
+        <div class="chart-header">
+          <div>
+            <h2>Outcome Distribution</h2>
+            <p class="chart-sub">Hover or click any bar to trace those exact rays on the board; drag the red Quota line.</p>
+          </div>
+          <label class="check-inline" for="chkLogScale">
+            <input type="checkbox" id="chkLogScale">
+            <span>Log Axis</span>
+          </label>
+        </div>
+
+        <div class="chart-toolbar">
+          <div class="segmented segmented-sm" role="group" aria-label="Distribution view">
+            <button type="button" class="seg-btn active" data-chartmode="pmf">Normal (PMF)</button>
+            <button type="button" class="seg-btn" data-chartmode="ccdf">At Least (CCDF)</button>
+            <button type="button" class="seg-btn" data-chartmode="slots">Bottom Slots</button>
+          </div>
+          <div class="segmented segmented-sm" role="group" aria-label="Comparison overlay">
+            <button type="button" class="seg-btn active" data-compare="skill">Naive vs Trained</button>
+            <button type="button" class="seg-btn" data-compare="baseline">Baseline vs Current</button>
+          </div>
+        </div>
+
+        <div class="chart-canvas-wrap chart-dist-wrap">
+          <canvas id="distCanvas" aria-label="Outcome probability distribution chart"></canvas>
+        </div>
+
+        <div class="quota-strip">
+          <div class="legend-row" id="distLegend"></div>
+          <div class="quota-pills" id="quotaPills"></div>
+        </div>
+      </article>
+
+      <!-- Input-to-Outcome Sensitivity Landscape -->
+      <article class="panel-card chart-card">
+        <div class="chart-header">
+          <div>
+            <h2>Aim Sensitivity Landscape</h2>
+            <p class="chart-sub">Deterministic score f(u) across every drop/angle. Drag to aim; shaded bells show Naive vs Trained execution spread.</p>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap chart-sens-wrap">
+          <canvas id="sensCanvas" aria-label="Input to outcome sensitivity chart"></canvas>
+        </div>
+      </article>
+
+      <!-- Trained vs Naive Skill User Calibration -->
+      <article class="panel-card">
+        <div class="panel-header">
+          <h2>Skill Users &amp; Stage Quota</h2>
+          <label class="check-inline" for="chkAutoAim">
+            <input type="checkbox" id="chkAutoAim" checked>
+            <span>Trained Auto-Aim</span>
+          </label>
+        </div>
+
+        <div class="skill-grid">
+          <div class="skill-col skill-trained">
+            <div class="skill-badge"><span class="dot dot-cyan"></span> Trained User</div>
+            <div class="slider-row">
+              <label for="slTrainedSigma"><span>Aim Spread (σ)</span><output id="outTrainedSigma">3.2%</output></label>
+              <input type="range" id="slTrainedSigma" min="0.008" max="0.16" step="0.002" value="0.032">
+            </div>
+            <div class="slider-row">
+              <label for="slTrainedTarget"><span>Target Aim</span><output id="outTrainedTarget">50%</output></label>
+              <input type="range" id="slTrainedTarget" min="0" max="1" step="0.005" value="0.5">
+            </div>
+            <div class="field-block">
+              <label class="field-label" for="selAutoGoal">Auto-Aim Objective</label>
+              <select id="selAutoGoal">
+                <option value="ev">Maximize Expected Score (EV)</option>
+                <option value="quota">Maximize Quota Pass Rate</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="skill-col skill-naive">
+            <div class="skill-badge"><span class="dot dot-amber"></span> Naive User</div>
+            <div class="slider-row">
+              <label for="slNaiveSigma"><span>Aim Spread (σ)</span><output id="outNaiveSigma">28%</output></label>
+              <input type="range" id="slNaiveSigma" min="0.06" max="1.0" step="0.01" value="0.28">
+            </div>
+            <div class="slider-row">
+              <label for="slNaiveTarget"><span>Target Aim</span><output id="outNaiveTarget">50%</output></label>
+              <input type="range" id="slNaiveTarget" min="0" max="1" step="0.005" value="0.5">
+            </div>
+            <div class="slider-row">
+              <label for="slQuota"><span>Stage Quota / Rent</span><output id="outQuota">105</output></label>
+              <input type="range" id="slQuota" min="0" max="600" step="5" value="105">
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <!-- Custom Complication Builder Modal -->
+  <dialog id="builderDialog" class="modal-dialog" closedby="any" aria-labelledby="builderTitle">
+    <form id="builderForm" class="modal-form">
+      <div class="modal-header">
+        <h2 id="builderTitle">Build Custom Complication</h2>
+        <button type="button" class="btn-close" data-close-dialog="builderDialog" aria-label="Close dialog">✕</button>
+      </div>
+
+      <div class="modal-body builder-grid">
+        <div class="field-block">
+          <label class="field-label" for="bName">Name</label>
+          <input type="text" id="bName" value="Hyper Pin" maxlength="24" required>
+        </div>
+
+        <div class="field-block">
+          <label class="field-label" for="bTag">Short Tag (1–4 chars)</label>
+          <input type="text" id="bTag" value="×3" maxlength="5">
+        </div>
+
+        <div class="field-block">
+          <label class="field-label" for="bShape">Geometry / Type</label>
+          <select id="bShape">
+            <option value="circle">Circle Peg / Bumper / Splitter</option>
+            <option value="segment">Wall / Ramp / One-Way Gate</option>
+            <option value="portal">Warp Portal Pair</option>
+            <option value="zone">Force / Scoring Field Zone</option>
+          </select>
+        </div>
+
+        <div class="field-block">
+          <label class="field-label" for="bColor">Color</label>
+          <input type="color" id="bColor" value="#ec4899">
+        </div>
+
+        <div class="field-block" data-shapes="circle,portal,zone">
+          <label class="field-label" for="bRadius">Radius (px)</label>
+          <input type="number" id="bRadius" min="5" max="130" step="1" value="14">
+        </div>
+
+        <div class="field-block" data-shapes="segment">
+          <label class="field-label" for="bLength">Default Length (px)</label>
+          <input type="number" id="bLength" min="24" max="240" step="4" value="100">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bRestitution">Restitution (Bounce)</label>
+          <input type="number" id="bRestitution" min="0.1" max="1.8" step="0.05" value="1.05">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment,portal">
+          <label class="field-label" for="bKick">Outward Kick Speed</label>
+          <input type="number" id="bKick" min="0" max="500" step="10" value="120">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bBias">Deflection Bias (°)</label>
+          <input type="number" id="bBias" min="-45" max="45" step="1" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bTangent">Tangential Spin Boost</label>
+          <input type="number" id="bTangent" min="-300" max="300" step="10" value="0">
+        </div>
+
+        <div class="field-block">
+          <label class="field-label" for="bScoreAdd">Score Add (+/-)</label>
+          <input type="number" id="bScoreAdd" min="-500" max="1000" step="5" value="25">
+        </div>
+
+        <div class="field-block">
+          <label class="field-label" for="bScoreMult">Score Multiplier (×)</label>
+          <input type="number" id="bScoreMult" min="0.25" max="10" step="0.25" value="1.5">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bSplit">Ball Split Count (1–3)</label>
+          <input type="number" id="bSplit" min="1" max="3" step="1" value="1">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bSplitSpread">Split Spread Angle (°)</label>
+          <input type="number" id="bSplitSpread" min="8" max="75" step="2" value="26">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment,portal">
+          <label class="field-label" for="bMaxHits">Pop After N Hits (0 = never)</label>
+          <input type="number" id="bMaxHits" min="0" max="20" step="1" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bTriggerN">Trigger Every N Hits (1 = every)</label>
+          <input type="number" id="bTriggerN" min="1" max="10" step="1" value="1">
+        </div>
+
+        <div class="field-block" data-shapes="circle">
+          <label class="field-label" for="bAuraRadius">Synergy Aura Radius (0 = off)</label>
+          <input type="number" id="bAuraRadius" min="0" max="220" step="5" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="circle">
+          <label class="field-label" for="bAuraBuff">Synergy Buff Nearby (+Score)</label>
+          <input type="number" id="bAuraBuff" min="-100" max="200" step="5" value="15">
+        </div>
+
+        <div class="field-block" data-shapes="circle">
+          <label class="check-inline" for="bIsRefresh">
+            <input type="checkbox" id="bIsRefresh">
+            <span>Refresh Peg (restores popped pegs)</span>
+          </label>
+        </div>
+
+        <div class="field-block" data-shapes="circle">
+          <label class="check-inline" for="bIsBomb">
+            <input type="checkbox" id="bIsBomb">
+            <span>Bomb Blast (pops pegs in 85px radius)</span>
+          </label>
+        </div>
+
+        <div class="field-block" data-shapes="segment">
+          <label class="field-label" for="bAngSpeed">Spinner Rotation (°/sec)</label>
+          <input type="number" id="bAngSpeed" min="-360" max="360" step="15" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="circle,segment">
+          <label class="field-label" for="bOscX">Oscillate X Amp (px)</label>
+          <input type="number" id="bOscX" min="-120" max="120" step="5" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="segment">
+          <label class="check-inline" for="bOneWay">
+            <input type="checkbox" id="bOneWay">
+            <span>One-Way Gate (pass one side)</span>
+          </label>
+        </div>
+
+        <div class="field-block" data-shapes="portal">
+          <label class="field-label" for="bExitAngle">Exit Launch Angle (°)</label>
+          <input type="number" id="bExitAngle" min="-180" max="180" step="5" value="70">
+        </div>
+
+        <div class="field-block" data-shapes="zone">
+          <label class="field-label" for="bForceX">Force X (Wind)</label>
+          <input type="number" id="bForceX" min="-1200" max="1200" step="20" value="400">
+        </div>
+
+        <div class="field-block" data-shapes="zone">
+          <label class="field-label" for="bForceY">Force Y (Lift / Down)</label>
+          <input type="number" id="bForceY" min="-1200" max="1200" step="20" value="0">
+        </div>
+
+        <div class="field-block" data-shapes="zone">
+          <label class="field-label" for="bRadial">Radial Force (−Magnet / +Repel)</label>
+          <input type="number" id="bRadial" min="-1200" max="1200" step="20" value="0">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-dialog="builderDialog">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save to Palette &amp; Select</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Import / Export JSON Modal -->
+  <dialog id="ioDialog" class="modal-dialog" closedby="any" aria-labelledby="ioTitle">
+    <div class="modal-form">
+      <div class="modal-header">
+        <h2 id="ioTitle">Import / Export Board &amp; Complications</h2>
+        <button type="button" class="btn-close" data-close-dialog="ioDialog" aria-label="Close dialog">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">
+          Export your current machine, custom complications, and settings as JSON, or bring in a saved board or complication pack.
+        </p>
+
+        <div class="io-actions-top">
+          <button type="button" id="btnCopyJson" class="btn btn-secondary">Copy JSON</button>
+          <button type="button" id="btnDownloadJson" class="btn btn-secondary">Download .json</button>
+          <label class="btn btn-secondary file-btn" for="fileImportJson">
+            Load .json File
+            <input type="file" id="fileImportJson" accept=".json,application/json" hidden>
+          </label>
+        </div>
+
+        <label class="field-label" for="txtIoJson">JSON Payload</label>
+        <textarea id="txtIoJson" class="io-textarea" rows="12" spellcheck="false"></textarea>
+        <output id="ioFeedback" class="io-feedback" aria-live="polite"></output>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-dialog="ioDialog">Close</button>
+        <button type="button" id="btnMergeComps" class="btn btn-accent">Merge Complications Only</button>
+        <button type="button" id="btnReplaceBoard" class="btn btn-primary">Load Full Board</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script defer src="js/math.js"></script>
+  <script defer src="js/engine.js"></script>
+  <script defer src="js/presets.js"></script>
+  <script defer src="js/markov.js"></script>
+  <script defer src="js/boardView.js"></script>
+  <script defer src="js/charts.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "name": "prismdrop",
+  "version": "1.0.0",
+  "description": "PrismDrop — Deterministic Raycasting Pachinko Lab & Live Desktop Clock Widget",
+  "author": "PrismDrop",
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "electron .",
+    "lab": "electron . --lab",
+    "build": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.prismdrop.desktop",
+    "productName": "PrismDrop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "styles.css",
+      "clock.html",
+      "clock.css",
+      "js/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "desktop/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.1"
+  },
+  "overrides": {
+    "@electron/universal": "3.0.4",
+    "app-builder-lib": {
+      "minimatch": "^11.0.1",
+      "@electron/asar": {
+        "minimatch": "3.1.5"
+      }
+    }
+  }
+}
